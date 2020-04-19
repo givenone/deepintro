@@ -148,3 +148,10 @@ def color_histogram_hsv(im, nbin=10, xmin=0, xmax=255, normalized=True):
 
     # return histogram
     return imhist
+
+
+# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+
+pass
+
+# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
