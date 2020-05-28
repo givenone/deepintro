@@ -63,28 +63,27 @@ class NESAttack(object):
 
         n, h, w, c = image.shape
         #print(n)
-        noise_pos = tf.random.normal((self.nes_batch_size, h, w, c)) # u_i
-        noise = tf.concat((noise_pos, -noise_pos), axis = 0)
+        noise_pos = np.random.normal(size = (self.nes_batch_size, h, w, c)) # u_i
+        noise = np.concatenate((noise_pos, -noise_pos), axis = 0)
 
-        image_batch = tf.tile(image, (self.nes_batch_size * 2, 1, 1, 1))
-        image_batch = tf.cast(image_batch, tf.float32)
+        image_batch = np.tile(image, (self.nes_batch_size * 2, 1, 1, 1))
+        #image_batch = np.cast(image_batch, tf.float32)
         image_batch = image_batch + self.sigma * noise
        
         label_batch = np.tile(label, (2 * self.nes_batch_size))
 
-        image_batch = sess.run(image_batch)
+        #image_batch = sess.run(image_batch)
         #label_batch = sess.run(label_batch)
-        losses = tf.convert_to_tensor(
-          sess.run(self.losses,
+        losses =  sess.run(self.losses,
                           feed_dict={self.x_input: image_batch,
                                      self.y_input: label_batch})
-        )
-      
+  
+        #print(losses.shape, image_batch.shape, label_batch.shape)
         diff = losses[:self.nes_batch_size] - losses[self.nes_batch_size:]
-        ans = tf.tensordot(diff, noise_pos, [[0], [0]])
+        ans = np.einsum("x, xyzw -> yzw", diff, noise_pos)
         grad_est = ans / self.nes_batch_size
 
-        return sess.run(grad_est)
+        return grad_est
         #print(grad_est)
         #return grad_est
     
