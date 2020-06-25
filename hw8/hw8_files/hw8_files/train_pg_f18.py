@@ -42,7 +42,13 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
         Hint: use tf.layers.dense    
     """
     # YOUR CODE HERE
-    raise NotImplementedError
+
+    with tf.variable_scope(scope) :
+        x = input_placeholder
+        for i in range(n_layers) :
+            x = tf.layers.dense(inputs=x, units=size, activation=activation)
+        output_placeholder = tf.layers.dense(inputs=x, units=output_size, activation=output_activation)
+    #raise NotImplementedError
     return output_placeholder
 
 def pathlength(path):
@@ -99,12 +105,12 @@ class Agent(object):
                 sy_ac_na: placeholder for actions
                 sy_q_n: placeholder for estimated q values
         """
-        raise NotImplementedError
+
         sy_ob_no = tf.placeholder(shape=[None, self.ob_dim], name="ob", dtype=tf.float32)
         sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
         sy_targets_n = tf.placeholder(shape=[None], name="baseline_target", dtype=tf.float32)
         # YOUR CODE HERE
-        sy_q_n = None
+        sy_q_n = tf.placeholder(shape=[None], name="q_values", dtype=tf.float32)
         return sy_ob_no, sy_ac_na, sy_q_n, sy_targets_n
 
     #========================================================================================#
@@ -129,12 +135,11 @@ class Agent(object):
                 pass in self.size for the 'size' argument.
         """
         # YOUR CODE HERE
-        raise NotImplementedError
-        sy_logits_na = None
+        sy_logits_na = build_mlp(input_placeholder=sy_ob_no, output_size=self.ac_dim, scope="policy", n_layers=self.n_layers, size=self.size)
         return sy_logits_na
 
     def baseline_forward_pass(self, sy_ob_no):
-        return tf.squeeze(build_mlp(sy_op_no, output_size=1, scope='nn_baseline', n_layers=self.n_layers, size=self.size))
+        return tf.squeeze(build_mlp(sy_ob_no, output_size=1, scope='nn_baseline', n_layers=self.n_layers, size=self.size))
 
     #========================================================================================#
     #                           ----------PROBLEM 4. Sample action----------
@@ -155,8 +160,7 @@ class Agent(object):
         """
         sy_logits_na = policy_parameters
         # YOUR CODE HERE
-        raise NotImplementedError
-        sy_sampled_ac = None
+        sy_sampled_ac = tf.squeeze(tf.multinomial(sy_logits_na, 1), axis=[1])
         return sy_sampled_ac
 
     #========================================================================================#
@@ -182,8 +186,7 @@ class Agent(object):
         """
         sy_logits_na = policy_parameters
         # YOUR CODE HERE
-        raise NotImplementedError
-        sy_logprob_n = None
+        sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=sy_logits_na)
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -225,7 +228,8 @@ class Agent(object):
         # Loss Function and Training Operation
         #========================================================================================#
         # YOUR CODE HERE
-        loss = None 
+        
+        loss = -tf.reduce_mean(tf.multiply(self.sy_logprob_n, self.sy_q_n))
         self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         if self.nn_baseline:
@@ -233,10 +237,11 @@ class Agent(object):
             # TODO: define the loss that should be optimized for training the baseline
             # HINT1: use tf.losses.mean_squared_error
             # HINT2: we want predictions (self.sy_bl_pred) to be as close as possible to the labels (self.sy_targets_n)
-            baseline_loss = None
+            
+            baseline_loss = tf.losses.mean_squared_error(self.sy_bl_pred, self.sy_targets_n)
 
             # TODO: define what exactly the optimizer should minimize when updating the baseline
-            self.baseline_update_op = None
+            self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(baseline_loss)
 
     def sample_trajectories(self, itr, env):
         # Collect paths until we have enough timesteps
@@ -264,8 +269,7 @@ class Agent(object):
             #                           ----------PROBLEM 7. Sample trajectory----------
             #====================================================================================#
             # YOUR CODE HERE
-            raise NotImplementedError
-            ac = None 
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no : ob[None]})
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
@@ -331,19 +335,29 @@ class Agent(object):
             like the 'ob_no' and 'ac_na' above. 
         """
         # YOUR CODE HERE
-        q_n = None
+        q_n = []
         if not self.reward_to_go:
             # TODO: Estimate the Q value Q^{pi}(s_t, a_t) using rewards from that entire trajectory
             # HINT1: value of each point (t) = total discounted reward summed over the entire trajectory (from 0 to T-1)
             # In other words, q(s_t, a_t) = sum_{t'=0}^{T-1} gamma^t' r_{t'}
-            pass
+            for re in re_n:                    
+                q=np.zeros(len(re))
+                q[-1]=re[-1]
+                for i in reversed(range(len(re)-1)):
+                    q[i]=re[i] + self.gamma * q[i+1]
+                q_n.extend(q)
 
         else:
             # TODO: Estimate the Q value Q^{pi}(s_t, a_t) as the reward-to-go
             # HINT1: value of each point (t) = total discounted reward summed over the remainder of that trajectory (from t to T-1)
             # In other words, q(s_t, a_t) = sum_{t'=t}^{T-1} gamma^(t'-t) * r_{t'}
-            pass
-
+            for re in re_n:
+                q = 0
+                for r in reversed(re):
+                    q *= self.gamma
+                    q += r
+                x = np.ones(shape=[len(re)]) * q
+                q_n.extend(x)
         return q_n
 
     def estimate_return(self, ob_no, re_n):
@@ -365,7 +379,7 @@ class Agent(object):
                     whose length is the sum of the lengths of the paths
         """
         # YOUR CODE HERE
-        q_n = None
+        q_n = self.sum_of_rewards(re_n)
 
         if self.nn_baseline:
             pass
@@ -403,11 +417,11 @@ class Agent(object):
         # and after an update, and then log them below. 
 
         # YOUR CODE HERE
-        raise NotImplementedError
+        targ = (q_n - tf.math.reduce_mean(q_n)) / (tf.math.reduce_std(q_n)+1e-8)
         if self.nn_baseline:
-            pass
+            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: targ, self.sy_ob_no: ob_no})
         else:
-            pass
+            self.sess.run([self.update_op], feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_q_n: q_n} )
 
 def train_PG(
         exp_name,
