@@ -418,7 +418,7 @@ class Agent(object):
 
         # YOUR CODE HERE
         if self.nn_baseline:
-            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: targets_n, self.sy_ob_no: ob_no})
+            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: targets_n.eval(), self.sy_ob_no: ob_no})
         else:
             self.sess.run([self.update_op], feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_q_n: q_n} )
 
