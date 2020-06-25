@@ -336,7 +336,7 @@ class Agent(object):
         """
         # YOUR CODE HERE
         q_n = []
-        if not self.reward_to_go:
+        if self.reward_to_go:
             # TODO: Estimate the Q value Q^{pi}(s_t, a_t) using rewards from that entire trajectory
             # HINT1: value of each point (t) = total discounted reward summed over the entire trajectory (from 0 to T-1)
             # In other words, q(s_t, a_t) = sum_{t'=0}^{T-1} gamma^t' r_{t'}
@@ -417,9 +417,8 @@ class Agent(object):
         # and after an update, and then log them below. 
 
         # YOUR CODE HERE
-        targ = (q_n - tf.math.reduce_mean(q_n)) / (tf.math.reduce_std(q_n)+1e-8)
         if self.nn_baseline:
-            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: targ, self.sy_ob_no: ob_no})
+            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: targets_n, self.sy_ob_no: ob_no})
         else:
             self.sess.run([self.update_op], feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_q_n: q_n} )
 
