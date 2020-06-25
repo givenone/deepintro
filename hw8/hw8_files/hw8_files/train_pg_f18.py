@@ -379,14 +379,14 @@ class Agent(object):
                     whose length is the sum of the lengths of the paths
         """
         # YOUR CODE HERE
+        
         q_n = self.sum_of_rewards(re_n)
-
-        if self.nn_baseline:
-            pass
-        else:
-            pass
-
-        return q_n
+        adv = None
+        if self.nn_baseline :
+            b_n = self.sess.run(self.sy_bl_pred , feed_dict = {self.sy_ob_no: ob_no})
+            b_n = np.mean(q_n) + b_n * np.std(q_n)
+            adv = q_n - b_n
+        return q_n, adv
 
 
     def update_parameters(self, ob_no, ac_na, q_n, targets_n):
@@ -418,7 +418,9 @@ class Agent(object):
 
         # YOUR CODE HERE
         if self.nn_baseline:
-            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: targets_n.eval(), self.sy_ob_no: ob_no})
+            target_n = (q_n - np.mean(q_n)) / (np.std(q_n)+1e-8)
+            self.sess.run([self.baseline_update_op], feed_dict={self.sy_targets_n: target_n, self.sy_ob_no: ob_no})
+            self.sess.run([self.update_op], feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_q_n: targets_n} )
         else:
             self.sess.run([self.update_op], feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_q_n: q_n} )
 
@@ -520,10 +522,10 @@ def train_PG(
         ac_na = np.concatenate([path["action"] for path in paths])
         re_n = [path["reward"] for path in paths]
 
-        q_n = agent.estimate_return(ob_no, re_n)
-        targets_n = (q_n - tf.math.reduce_mean(q_n)) / (tf.math.reduce_std(q_n)+1e-8)
-        agent.update_parameters(ob_no, ac_na, q_n, targets_n)
+        q_n, adv = agent.estimate_return(ob_no, re_n)
 
+        agent.update_parameters(ob_no, ac_na, q_n, adv)
+        
         # Log diagnostics
         returns = [path["reward"].sum() for path in paths]
         ep_lengths = [pathlength(path) for path in paths]
